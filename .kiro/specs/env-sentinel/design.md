@@ -1,0 +1,343 @@
+# Design Document
+
+## Overview
+
+Env-Sentinelは、新生児の安全を最優先とした環境モニタリングシステムです。Raspberry Pi上で動作し、BME280センサを使用して温湿度を継続的に監視し、Slackを通じて通知を行います。モジュラー設計により将来の拡張性を確保し、多重の安全機構により高い信頼性を実現します。
+
+## Architecture
+
+### System Architecture
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Env-Sentinel System                      │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │   Sensor    │  │ Monitoring  │  │Notification │        │
+│  │   Module    │──│   Module    │──│   Module    │        │
+│  └─────────────┘  └─────────────┘  └─────────────┘        │
+│         │                 │                 │              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │   Storage   │  │   Config    │  │Visualization│        │
+│  │   Module    │  │   Module    │  │   Module    │        │
+│  └─────────────┘  └─────────────┘  └─────────────┘        │
+├─────────────────────────────────────────────────────────────┤
+│                  Core Framework                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │   Logger    │  │ Health      │  │   Event     │        │
+│  │   System    │  │ Monitor     │  │   Bus       │        │
+│  └─────────────┘  └─────────────┘  └─────────────┘        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Data Flow
+
+**Phase 1 (MVP) - Direct Notification**:
+```
+BME280 Sensor → Sensor Module → Data Validation → Local Storage
+                      ↓                              
+              Monitoring Module ← Event Bus         
+                      ↓                              
+              Alert Manager → Slack Notifier → Slack API
+```
+
+**Phase 2 (Cloud Integration)**:
+```
+BME280 Sensor → Sensor Module → Data Validation → Local Storage
+                      ↓                              ↓
+              Monitoring Module ← Event Bus ← Cloud Sync
+                      ↓                              ↓
+              Alert Manager → IoT Notifier → AWS IoT Core → Lambda → Slack API
+```
+
+### Phase 2 - AWS Integration Architecture
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Raspberry Pi  │    │   AWS IoT Core  │    │   Lambda        │
+│                 │    │                 │    │                 │
+│ ┌─────────────┐ │    │ ┌─────────────┐ │    │ ┌─────────────┐ │
+│ │   Sensor    │ │    │ │   Device    │ │    │ │ Notification│ │
+│ │   Reading   │─┼────┼→│   Shadow    │─┼────┼→│  Handler    │ │
+│ └─────────────┘ │    │ └─────────────┘ │    │ └─────────────┘ │
+│ ┌─────────────┐ │    │ ┌─────────────┐ │    │ ┌─────────────┐ │
+│ │   Alert     │ │    │ │   Rules     │ │    │ │   Slack     │ │
+│ │  Generator  │─┼────┼→│   Engine    │─┼────┼→│   Client    │ │
+│ └─────────────┘ │    │ └─────────────┘ │    │ └─────────────┘ │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+                                ↓
+                       ┌─────────────────┐
+                       │   DynamoDB      │
+                       │                 │
+                       │ ┌─────────────┐ │
+                       │ │  Sensor     │ │
+                       │ │  Data       │ │
+                       │ └─────────────┘ │
+                       └─────────────────┘
+```
+
+## Components and Interfaces
+
+### 1. Sensor Module
+**責任**: センサからのデータ取得と検証
+
+**インターフェース**:
+```python
+class BaseSensor(ABC):
+    @abstractmethod
+    async def read_data(self) -> SensorReading:
+        pass
+    
+    @abstractmethod
+    async def health_check(self) -> bool:
+        pass
+
+class BME280Sensor(BaseSensor):
+    async def read_data(self) -> SensorReading:
+        # I2C通信でBME280からデータ取得
+        # データ妥当性検証
+        # SensorReadingオブジェクト生成
+        pass
+```
+
+**安全機構**:
+- 3回連続失敗でセンサ故障判定
+- 物理的に不可能な値の検出（-50℃〜100℃範囲外）
+- I2C通信エラーのハンドリング
+
+### 2. Monitoring Module
+**責任**: 環境データの監視とアラート判定
+
+**インターフェース**:
+```python
+class AlertManager:
+    def __init__(self, config: AlertConfig):
+        self.temp_range = config.temperature_range
+        self.humidity_range = config.humidity_range
+    
+    async def evaluate_reading(self, reading: SensorReading) -> List[Alert]:
+        # 温湿度範囲チェック
+        # 極端値チェック（緊急アラート）
+        # アラート生成
+        pass
+```
+
+**アラートレベル**:
+- **INFO**: 定期レポート
+- **WARNING**: 推奨範囲外（18℃未満、26℃超、湿度40%未満、60%超）
+- **CRITICAL**: 極端値（10℃未満、35℃超）
+- **EMERGENCY**: センサ故障、システム障害
+
+### 3. Notification Module
+**責任**: 各種通知手段への配信
+
+**Phase 1 Implementation**:
+```python
+class BaseNotifier(ABC):
+    @abstractmethod
+    async def send_notification(self, message: NotificationMessage) -> bool:
+        pass
+
+class SlackNotifier(BaseNotifier):
+    async def send_notification(self, message: NotificationMessage) -> bool:
+        # 直接Slack APIに送信
+        # Slack Block Kit形式でメッセージ構築
+        # レート制限考慮
+        # 送信失敗時のリトライ
+        pass
+
+class IoTNotifier(BaseNotifier):  # Phase 2で実装
+    async def send_notification(self, message: NotificationMessage) -> bool:
+        # AWS IoT Coreに送信
+        # Lambda経由でSlack通知
+        pass
+```
+
+**通知戦略**:
+- **Phase 1**: Raspberry Pi → Slack API（直接）
+- **Phase 2**: Raspberry Pi → AWS IoT → Lambda → Slack API
+- **フォールバック**: ローカル通知失敗時はログ記録、復旧時に一括送信
+
+**メッセージ形式**:
+- 定期レポート: 温度、湿度、時刻、トレンド
+- アラート: 警告レベル、具体的数値、推奨アクション
+- システム状態: 起動、停止、エラー、復旧
+
+### 4. Storage Module
+**責任**: 段階的なデータ永続化戦略
+
+**Phase 1 Implementation**:
+```python
+class LocalStorage:
+    async def store_reading(self, reading: SensorReading) -> bool:
+        # ローカルSQLiteに保存
+        # 可視化用の高速アクセス
+        pass
+    
+    async def get_recent_data(self, hours: int) -> List[SensorReading]:
+        # 直近データの取得（グラフ生成用）
+        pass
+```
+
+**Phase 2 Implementation**:
+```python
+class HybridStorage:
+    def __init__(self, local_storage: LocalStorage):
+        self.local_storage = local_storage
+        
+    async def store_reading(self, reading: SensorReading) -> bool:
+        # ローカル保存
+        await self.local_storage.store_reading(reading)
+        # IoT Core経由でクラウド同期
+        await self.sync_to_cloud(reading)
+        
+    async def sync_to_cloud(self, reading: SensorReading) -> bool:
+        # AWS IoT Core経由でDynamoDBに保存
+        pass
+```
+
+**データモデル**:
+```sql
+CREATE TABLE sensor_readings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME NOT NULL,
+    temperature REAL NOT NULL,
+    humidity REAL NOT NULL,
+    pressure REAL,
+    sensor_id TEXT NOT NULL,
+    synced_to_cloud BOOLEAN DEFAULT FALSE
+);
+```
+
+### 5. Configuration Module
+**責任**: 設定の管理と動的更新
+
+**設定構造**:
+```json
+{
+  "sensor": {
+    "type": "BME280",
+    "i2c_address": "0x76",
+    "read_interval_seconds": 60,
+    "failure_threshold": 3
+  },
+  "alerts": {
+    "temperature": {"min": 18, "max": 26, "critical_min": 10, "critical_max": 35},
+    "humidity": {"min": 40, "max": 60}
+  },
+  "notifications": {
+    "slack": {
+      "channel": "#baby-room",
+      "report_interval_seconds": 1800,
+      "rate_limit_per_minute": 1
+    }
+  },
+  "storage": {
+    "local_retention_days": 90,
+    "cloud_sync_interval_seconds": 300,
+    "cloud_provider": "aws"
+  }
+}
+```
+
+## Data Models
+
+### SensorReading
+```python
+@dataclass
+class SensorReading:
+    timestamp: datetime
+    temperature: float
+    humidity: float
+    pressure: Optional[float]
+    sensor_id: str
+    is_valid: bool = True
+    
+    def validate(self) -> bool:
+        # 温度: -40℃ ～ 85℃ (BME280仕様範囲)
+        # 湿度: 0% ～ 100%
+        # 物理的妥当性チェック
+        pass
+```
+
+### Alert
+```python
+@dataclass
+class Alert:
+    level: AlertLevel  # INFO, WARNING, CRITICAL, EMERGENCY
+    message: str
+    timestamp: datetime
+    sensor_reading: Optional[SensorReading]
+    recommended_action: Optional[str]
+```
+
+## Error Handling
+
+### 1. センサエラー処理
+- **I2C通信エラー**: 3回リトライ後、センサ故障判定
+- **データ異常**: 妥当性チェック失敗時、前回値で補完
+- **センサ故障**: 緊急アラート送信、手動確認促進
+
+### 2. ネットワークエラー処理
+- **Slack API失敗**: 指数バックオフでリトライ
+- **クラウド同期失敗**: ローカルキューに蓄積、復旧時に同期
+- **完全ネットワーク断**: ローカルログに記録、復旧時に一括報告
+
+### 3. システムエラー処理
+- **プロセス異常終了**: systemdによる自動再起動
+- **メモリ不足**: ログローテーション、古いデータ削除
+- **ディスク容量不足**: 古いデータのクラウド移行
+
+## Testing Strategy
+
+### 1. Unit Tests
+- 各モジュールの独立テスト
+- モックを使用したセンサ・API テスト
+- エラーケースの網羅的テスト
+
+### 2. Integration Tests
+- 実際のBME280センサとの統合
+- Slack API との実通信テスト
+- データベース操作の整合性テスト
+
+### 3. Hardware Tests
+- Raspberry Pi実機での24時間稼働テスト
+- 温度・湿度変化への応答テスト
+- 電源断・復旧テスト
+
+### 4. Safety Tests
+- センサ故障シミュレーション
+- ネットワーク断絶テスト
+- 極端環境条件テスト
+
+## Security Considerations
+
+### 1. 認証・認可
+- Slack Bot Token の安全な管理
+- 環境変数による秘匿情報管理
+- 最小権限の原則
+
+### 2. データ保護
+- ローカルデータベースの暗号化
+- クラウド通信のTLS暗号化
+- 個人情報の最小化
+
+### 3. システムセキュリティ
+- 定期的なセキュリティアップデート
+- ファイアウォール設定
+- 不正アクセス監視
+
+## Performance Requirements
+
+### 1. リアルタイム性
+- センサ読み取り: 1分間隔
+- アラート通知: 30秒以内
+- システム応答: 5秒以内
+
+### 2. リソース使用量
+- CPU使用率: 10%以下
+- メモリ使用量: 100MB以下
+- ディスク使用量: 1GB以下（ログ含む）
+
+### 3. 可用性
+- システム稼働率: 99.9%以上
+- データ損失: 0%
+- 復旧時間: 5分以内
