@@ -21,7 +21,7 @@ fileMatchPattern: '**/env-sentinel/**'
 - **Task Scheduler**: APScheduler
 
 ## Library Categories
-- **センサ制御**: Adafruit CircuitPython libraries for BME280
+- **センサ制御**: Adafruit CircuitPython libraries for BME280（`adafruit-circuitpython-bme280`, `adafruit-blinka`）。ローカル開発では `SimulatedBME280Driver` を使用しハードウェア不要で挙動確認可能。
 - **通信・API**: 
   - Phase 1: aiohttp, slack-sdk for direct Slack integration
   - Phase 2: AWSIoTDeviceSDK for IoT Core communication
@@ -37,10 +37,19 @@ fileMatchPattern: '**/env-sentinel/**'
 - **Containerization**: Docker (開発・テスト用)
 - **Version Control**: Git with conventional commits
 
+## Sensor Stack Notes
+- **BaseSensor**: 共通のリトライ／ヘルスチェック／異常値補完を提供し、 `_read_sensor` / `_close_impl` のみドライバ固有実装。連続失敗は `SensorReadError` で通知。
+- **BME280 Drivers**:
+  - `SimulatedBME280Driver`: テスト・CI 用。追加依存不要で決定論的な値を提供。
+  - `RaspberryPiBME280Driver`: `board`, `busio`, `adafruit_bme280` を `asyncio.to_thread` でラップしてI2C読み取り。導入コマンド例:  
+    ```bash
+    pip install adafruit-circuitpython-bme280 adafruit-blinka
+    ```
+- **Factory Wiring**: `create_default_sensor_factory(prefer_hardware=None)` が自動で適切なビルダーを選択。ハードウェア強制時は `prefer_hardware=True` を渡すか `RASPBERRY_PI_BME280_BUILDER` を明示登録する。
+
 ## Technical Constraints
 - **Resource Limits**: CPU 10%以下、メモリ 100MB以下
 - **Network**: 家庭用Wi-Fi環境での動作
 - **Power**: 24時間連続稼働対応
 - **Environment**: 新生児の部屋での静音動作
 - **Phase Migration**: Phase 1からPhase 2への無停止移行対応
-

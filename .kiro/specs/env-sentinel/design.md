@@ -79,29 +79,54 @@ BME280 Sensor → Sensor Module → Data Validation → Local Storage
 ### 1. Sensor Module
 **責任**: センサからのデータ取得と検証
 
-**インターフェース**:
+**インターフェース実装状況**:
 ```python
 class BaseSensor(ABC):
+    def __init__(self, sensor_id: str, *, failure_threshold: int, max_retries: int, retry_delay_seconds: float):
+        self.sensor_id = sensor_id
+        ...
+
+    async def read(self) -> SensorReading:          # 共通リトライ + 異常値補正
+        reading = await self._read_sensor()
+        ...
+        return reading
+
+    async def close(self) -> None:                  # リソース解放
+        await self._close_impl()
+
+    async def health_check(self) -> bool:           # 故障閾値ベースでヘルス判断
+        return self.failure_count < self.failure_threshold and await self._perform_health_check()
+
+    async def on_read_success(self, reading: SensorReading) -> None: ...
+    async def on_read_failure(self, attempt: int, error: Exception) -> None: ...
+
     @abstractmethod
-    async def read_data(self) -> SensorReading:
-        pass
-    
+    async def _read_sensor(self) -> SensorReading: ...
     @abstractmethod
-    async def health_check(self) -> bool:
-        pass
+    async def _close_impl(self) -> None: ...
+
 
 class BME280Sensor(BaseSensor):
-    async def read_data(self) -> SensorReading:
-        # I2C通信でBME280からデータ取得
-        # データ妥当性検証
-        # SensorReadingオブジェクト生成
-        pass
+    def __init__(self, *, driver: BME280Driver, config: SensorConfig, sensor_id: str):
+        ...
+
+    async def _read_sensor(self) -> SensorReading:
+        sample = await self._driver.read_sample()
+        return SensorReading.from_values(...)
+
+    async def _close_impl(self) -> None:
+        await self._driver.close()
 ```
 
+- **Driver Abstraction**: `BME280Driver` / `BME280DriverFactory` で実機とシミュレータを差し替え。  
+  - `SimulatedBME280Driver`: デフォルトの決定論的サンプル。  
+  - `RaspberryPiBME280Driver`: Adafruit CircuitPython (`board`, `busio`, `adafruit_bme280`) を動的ロードし、I2C（`SensorConfig.i2c_address`）から読み取り。  
+- **SensorFactory**: `SensorFactory` + `DEFAULT_BME280_BUILDER` / `RASPBERRY_PI_BME280_BUILDER` を介して Config 駆動でセンサ生成。`create_default_sensor_factory(prefer_hardware=None)` は環境に応じて自動判定。  
+
 **安全機構**:
-- 3回連続失敗でセンサ故障判定
-- 物理的に不可能な値の検出（-50℃〜100℃範囲外）
-- I2C通信エラーのハンドリング
+- 3回連続失敗でセンサ故障判定、`health_check()` が False を返す。
+- `SensorReading.validate(prev)` により物理範囲外の値は最後の正常値で補間し `is_valid=False` でマーキング。
+- I2C通信エラーは BaseSensor の共通リトライ (`max_retries`/`retry_delay_seconds`) で吸収し、失敗時は `SensorReadError` をraise。
 
 ### 2. Monitoring Module
 **責任**: 環境データの監視とアラート判定
