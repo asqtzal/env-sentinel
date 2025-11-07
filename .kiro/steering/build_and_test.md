@@ -18,6 +18,29 @@ fileMatchPattern: '**/env-sentinel/**'
 - Git
 - I2C tools (Raspberry Pi OS)
 
+## Setup & Tooling
+
+### 仮想環境
+1. `python -m venv .venv`
+2. `source .venv/bin/activate` （Windows: `.venv\Scripts\activate`）
+3. 依存関係インストール  
+   - ランタイム: `pip install -r requirements.txt`  
+   - 開発/テスト: `pip install -r requirements-dev.txt`
+
+### 環境変数
+- `ENV_SENTINEL_LOG_LEVEL`: `INFO` / `DEBUG` などログレベルを制御
+- SlackトークンやAPIキーは `.env` 管理（コード直書き禁止）
+
+### コマンド一覧
+
+| コマンド | 用途 |
+| --- | --- |
+| `pytest` | ユニットテスト実行 |
+| `black . && isort .` | フォーマット整形 |
+| `flake8` | スタイル/静的解析 |
+| `mypy` | 型検査 |
+| `pytest --maxfail=1 -q` | 軽量検証（PR前など） |
+
 ## Testing Strategy
 
 ### Test Categories
@@ -38,6 +61,7 @@ fileMatchPattern: '**/env-sentinel/**'
 - **flake8**: リンティング
 - **mypy**: 型チェック
 - **isort**: インポート整理
+- `pytest.ini` で `src/` を `PYTHONPATH` に追加済み
 
 ### Pre-commit Hooks
 実装時にpre-commit設定を追加予定
@@ -48,6 +72,7 @@ fileMatchPattern: '**/env-sentinel/**'
 - プルリクエスト時の自動テスト
 - コード品質チェック
 - セキュリティスキャン
+- 手順案: `pip install -r requirements-dev.txt` → `black --check .` → `isort --check-only .` → `flake8` → `mypy` → `pytest`
 
 ### Hardware Testing
 - Raspberry Pi実機での定期テスト
@@ -66,6 +91,7 @@ AWS IoT統合を含むビルド
 ### Local Deployment
 - systemdサービスとしての登録
 - 自動起動設定
+- デプロイスクリプト実行前に `pytest` 合格およびリンタ通過を必須
 
 ### Configuration Management
 - JSON設定ファイル
