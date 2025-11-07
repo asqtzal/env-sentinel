@@ -1,0 +1,32 @@
+{
+  "sensor": {
+    "type": "BME280",
+    "i2c_address": "0x76",
+    "read_interval_seconds": 60,
+    "failure_threshold": 3
+  },
+  "alerts": {
+    "temperature": {
+      "min": 18.0,
+      "max": 26.0,
+      "critical_min": 10.0,
+      "critical_max": 35.0
+    },
+    "humidity": {
+      "min": 40.0,
+      "max": 60.0
+    }
+  },
+  "notifications": {
+    "slack": {
+      "channel": "#baby-room",
+      "report_interval_seconds": 1800,
+      "rate_limit_per_minute": 1
+    }
+  },
+  "storage": {
+    "local_retention_days": 90,
+    "cloud_sync_interval_seconds": 300,
+    "cloud_provider": "aws"
+  }
+}

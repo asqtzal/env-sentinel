@@ -22,9 +22,10 @@
    pip install -r requirements-dev.txt
    ```
 
-### 環境変数
+### 環境変数・設定ファイル
 - `ENV_SENTINEL_LOG_LEVEL`（任意）: `INFO`/`DEBUG` などのログレベルを指定。
-- 今後追加予定のAPIキーやSlackトークンは `.env` で管理し、コードに埋め込まない。
+- 設定ファイルは `config/default_config.json` をベースに `config/app_config.json`（任意）などへコピーして編集。未作成の場合はデフォルト値が使用される予定。
+- APIキーやSlackトークンは `.env` で管理し、コードに埋め込まない。
 
 ## コマンド一覧
 
@@ -56,4 +57,5 @@
 ## 参考ドキュメント
 - `.kiro/specs/env-sentinel/` : 要求仕様・設計・タスク計画
 - `.kiro/steering/` : プロダクト方針、コーディング規約、セキュリティ指針
-
+- `docs/reference/config_parameters.md` : 設定パラメータ一覧とデフォルト値
+- `docs/tasks/task_2_config.md` : 設定モジュールに関するタスク分解
