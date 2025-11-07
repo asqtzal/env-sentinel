@@ -66,3 +66,4 @@
 - `docs/reference/config_parameters.md` : 設定パラメータ一覧とデフォルト値
 - `docs/tasks/task_2_config.md` : 設定モジュールに関するタスク分解
 - `docs/guides/config_manager.md` : ConfigManager の使い方と監視/フォールバック手順
+- `docs/TODO.md` : ドキュメント整備やテスト方針メモなど横断的TODO
