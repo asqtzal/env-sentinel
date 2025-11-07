@@ -63,12 +63,20 @@
   - Adafruit CircuitPython スタックを利用する `RaspberryPiBME280Driver` を追加。`create_raspberry_pi_driver_factory()` でドライバを組み立て。  
   - `create_default_sensor_factory(prefer_hardware=None)` はハードウェア依存を自動検出し、利用不可の場合はシミュレータにフォールバック。  
   - ハードウェア向けには `pip install adafruit-circuitpython-bme280 adafruit-blinka` を Raspberry Pi 上で実行し、`SensorFactory` に `RASPBERRY_PI_BME280_BUILDER` を登録すれば実機動作可能。  
+- 🚧 **3.2-d モック/実機テスト**  
+  - 追加済み:  
+    - `tests/sensors/test_bme280_sensor.py` にリトライ限界（`SensorReadError`）、I2C初期化失敗、`RaspberryPiBME280Driver` の読み取り失敗を再現するケースを追加。  
+    - `pytest tests/sensors/test_bme280_sensor.py` で 9 ケース成功（CI向けはシミュレータのみ）。  
+  - 未了: 実機（Raspberry Pi）で `RASPBERRY_PI_BME280_BUILDER` を使い `python -m pytest tests/sensors/test_bme280_sensor.py -k raspberry --maxfail=1` などを実行し I2C 通信を確認。  
+- ✅ **3.3 エラーハンドリング**  
+  - `SensorFailureEvent` / `SensorAnomalyEvent` を `src/env_sentinel/sensors/models.py` に定義。  
+  - `BaseSensor` が `failure_callback` / `anomaly_callback` を受け取り、連続失敗閾値超過や `SensorReading` の `invalid_fields` を検知して通知。  
+  - 失敗イベントは閾値到達時に一度発火し、成功でリセット。異常値は `SensorReading.validate()` の結果に応じて通知。  
+  - テスト: `tests/sensors/test_base_sensor.py` / `tests/sensors/test_sensor_reading.py` でイベント発火・invalid_fields 記録を検証。  
 - ⏳ **次ステップ候補**  
-  1. Task 3.2-d: 
-     - `RaspberryPiBME280Driver` の例外（I2C初期化失敗、`to_thread` 内エラー）をモックで再現しテスト追加。  
-     - 実機で `RASPBERRY_PI_BME280_BUILDER` を使ったエンドツーエンド読取確認（Pi環境で依存導入→`python -m pytest tests/sensors/test_bme280_sensor.py -k raspberry` 等で検証）。  
-  2. Task 3.3-a/b/c: `BaseSensor.on_read_failure` を拡張して故障カウンタ閾値で通知コールバックを呼び出し、`SensorReading.is_valid` を活用した異常値イベントを Monitoring/Alert モジュールに連携。  
-  3. Task 3.3-d: 上記ロジックをモックセンサ＋Configコールバックでユニットテスト。  
+  1. Task 3.2-d 残件: Raspberry Pi 上で依存 (`pip install adafruit-circuitpython-bme280 adafruit-blinka`) を導入し、センサ接続した状態で読取テスト・ログ取得（Phase1 終盤の実機検証タイミングで実施予定）。  
+  2. Monitoring/Alert連携: `failure_callback` / `anomaly_callback` に Monitoring モジュールや ConfigManager のフックを接続し、通知/アラートラインへ伝播する処理を実装。  
+  3. 運用ドキュメント更新: センサイベントのサブスクライブ手順・設定例を `docs/guides` 配下に追記。  
 - 📌 **動作確認手順**  
   ```bash
   source .venv/bin/activate

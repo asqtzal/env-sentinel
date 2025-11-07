@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Optional
 
@@ -22,6 +22,7 @@ class SensorReading:
     pressure: Optional[float] = None
     sensor_id: str = "sensor-001"
     is_valid: bool = True
+    invalid_fields: tuple[str, ...] = field(init=False, default_factory=tuple)
 
     def validate(self, previous: Optional["SensorReading"] = None) -> bool:
         """Validate the reading and optionally fall back to previous values.
@@ -46,6 +47,7 @@ class SensorReading:
                 self.humidity = previous.humidity
 
         self.is_valid = not errors
+        self.invalid_fields = tuple(errors)
         return self.is_valid
 
     @classmethod
@@ -64,3 +66,22 @@ class SensorReading:
             pressure=pressure,
             sensor_id=sensor_id,
         )
+
+
+@dataclass(slots=True)
+class SensorFailureEvent:
+    """Event emitted when a sensor exceeds the configured failure threshold."""
+
+    sensor_id: str
+    failure_count: int
+    failure_threshold: int
+    last_error: Optional[Exception]
+
+
+@dataclass(slots=True)
+class SensorAnomalyEvent:
+    """Event emitted when a reading contains invalid/adjusted values."""
+
+    sensor_id: str
+    reading: SensorReading
+    invalid_fields: tuple[str, ...]

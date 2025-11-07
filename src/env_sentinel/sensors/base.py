@@ -4,10 +4,19 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Optional
+import inspect
+from typing import Awaitable, Callable, Optional
 
-from env_sentinel.sensors.models import SensorReading
+from env_sentinel.sensors.models import (
+    SensorAnomalyEvent,
+    SensorFailureEvent,
+    SensorReading,
+)
 from env_sentinel.utils.logger import get_logger
+
+
+FailureCallback = Callable[[SensorFailureEvent], Optional[Awaitable[None]] | None]
+AnomalyCallback = Callable[[SensorAnomalyEvent], Optional[Awaitable[None]] | None]
 
 
 class SensorError(RuntimeError):
@@ -54,6 +63,8 @@ class BaseSensor(ABC):
         failure_threshold: int = 3,
         max_retries: int = 3,
         retry_delay_seconds: float = 0.0,
+        failure_callback: FailureCallback | None = None,
+        anomaly_callback: AnomalyCallback | None = None,
     ) -> None:
         if not sensor_id:
             raise ValueError("sensor_id must be a non-empty string")
@@ -68,11 +79,14 @@ class BaseSensor(ABC):
         self.failure_threshold = failure_threshold
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
+        self._failure_callback = failure_callback
+        self._anomaly_callback = anomaly_callback
 
         self._consecutive_failures = 0
         self._last_valid_reading: Optional[SensorReading] = None
         self._last_error: Optional[Exception] = None
         self._closed = False
+        self._failure_reported = False
         self._logger = get_logger(f"{self.__class__.__module__}.{self.__class__.__name__}")
 
     async def __aenter__(self) -> "BaseSensor":
@@ -171,9 +185,12 @@ class BaseSensor(ABC):
         reading.validate(previous=previous)
         if reading.is_valid:
             self._last_valid_reading = reading
+        await self._emit_anomaly_event(reading)
 
         self._consecutive_failures = 0
         self._last_error = None
+        if self._failure_reported:
+            self._failure_reported = False
         await self.on_read_success(reading)
 
     async def _handle_attempt_failure(self, attempt: int, error: Exception) -> bool:
@@ -187,6 +204,12 @@ class BaseSensor(ABC):
             error,
         )
         await self.on_read_failure(attempt, error)
+        if (
+            not self._failure_reported
+            and self._consecutive_failures >= self.failure_threshold
+        ):
+            self._failure_reported = True
+            await self._emit_failure_event()
 
         if not self._should_retry(attempt, error):
             return False
@@ -203,3 +226,36 @@ class BaseSensor(ABC):
     @abstractmethod
     async def _close_impl(self) -> None:
         """Release hardware-specific resources."""
+
+    async def _emit_failure_event(self) -> None:
+        """Notify subscribers when the sensor is considered failed."""
+        if not self._failure_callback:
+            return
+        event = SensorFailureEvent(
+            sensor_id=self.sensor_id,
+            failure_count=self._consecutive_failures,
+            failure_threshold=self.failure_threshold,
+            last_error=self._last_error,
+        )
+        await self._invoke_callback(self._failure_callback, event)
+
+    async def _emit_anomaly_event(self, reading: SensorReading) -> None:
+        """Notify subscribers when a reading contains invalid data."""
+        if not self._anomaly_callback or reading.is_valid:
+            return
+        event = SensorAnomalyEvent(
+            sensor_id=self.sensor_id,
+            reading=reading,
+            invalid_fields=reading.invalid_fields,
+        )
+        await self._invoke_callback(self._anomaly_callback, event)
+
+    async def _invoke_callback(
+        self,
+        callback: Callable[[object], Optional[Awaitable[None]] | None],
+        event: object,
+    ) -> None:
+        """Invoke callback that may be synchronous or asynchronous."""
+        result = callback(event)
+        if inspect.isawaitable(result):
+            await result  # type: ignore[func-returns-value]

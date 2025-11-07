@@ -16,6 +16,7 @@ from env_sentinel.sensors import (
     BME280Sensor,
     DEFAULT_BME280_BUILDER,
     SensorFactory,
+    SensorReadError,
     create_bme280_builder,
     create_raspberry_pi_driver_factory,
 )
@@ -66,6 +67,15 @@ def test_bme280_sensor_retries_driver_failures() -> None:
     reading = run(sensor.read())
 
     assert reading.is_valid is True
+
+
+def test_bme280_sensor_raises_after_retries_exhausted() -> None:
+    sample = BME280Sample(temperature=19.0, humidity=50.0, pressure=None)
+    driver = FakeDriver(sample=sample, fail_times=10)
+    sensor = BME280Sensor(sensor_id="bme-fail", driver=driver, config=SensorConfig(failure_threshold=2))
+
+    with pytest.raises(SensorReadError):
+        run(sensor.read())
 
 
 def test_bme280_builder_uses_driver_factory() -> None:
@@ -142,3 +152,42 @@ def test_raspberry_pi_driver_factory_requires_dependencies(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match="missing hardware libs"):
         factory(config=SensorConfig())
+
+
+def test_raspberry_pi_driver_factory_i2c_failure() -> None:
+    board = SimpleNamespace(SCL="scl", SDA="sda")
+
+    class BrokenBusio:
+        def I2C(self, scl: Any, sda: Any) -> None:
+            raise OSError("I2C bus busy")
+
+    def dependency_loader():
+        return board, BrokenBusio(), object()
+
+    factory = create_raspberry_pi_driver_factory(dependency_loader=dependency_loader)
+
+    with pytest.raises(OSError, match="I2C bus busy"):
+        factory(config=SensorConfig())
+
+
+def test_raspberry_pi_driver_propagates_sensor_errors() -> None:
+    class FlakySensor:
+        def __init__(self) -> None:
+            self.relative_humidity = 10.0
+            self.pressure = 1000.0
+
+        @property
+        def temperature(self) -> float:
+            raise RuntimeError("sensor read failed")
+
+        def deinit(self) -> None:
+            pass
+
+    class DummyI2C:
+        def deinit(self) -> None:
+            pass
+
+    driver = bme280_module.RaspberryPiBME280Driver(sensor=FlakySensor(), i2c=DummyI2C())
+
+    with pytest.raises(RuntimeError, match="sensor read failed"):
+        run(driver.read_sample())

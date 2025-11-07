@@ -23,12 +23,16 @@ class DummySensor(BaseSensor):
         failures_before_success: int = 0,
         failure_threshold: int = 3,
         max_retries: int = 3,
+        failure_callback=None,
+        anomaly_callback=None,
     ) -> None:
         super().__init__(
             sensor_id="dummy",
             failure_threshold=failure_threshold,
             max_retries=max_retries,
             retry_delay_seconds=0.0,
+            failure_callback=failure_callback,
+            anomaly_callback=anomaly_callback,
         )
         self.failures_before_success = failures_before_success
         self.read_calls = 0
@@ -51,6 +55,57 @@ class DummySensor(BaseSensor):
     def _get_retry_delay(self, attempt: int) -> float:
         """Avoid slow sleeps in tests."""
         return 0.0
+
+
+class CyclicFailureSensor(BaseSensor):
+    """Fails twice before succeeding, every read cycle."""
+
+    def __init__(self, *, failure_callback) -> None:
+        super().__init__(
+            sensor_id="cyclic",
+            failure_threshold=2,
+            max_retries=3,
+            retry_delay_seconds=0.0,
+            failure_callback=failure_callback,
+        )
+        self._attempt_in_cycle = 0
+
+    async def _read_sensor(self) -> SensorReading:
+        self._attempt_in_cycle += 1
+        if self._attempt_in_cycle <= 2:
+            raise RuntimeError("cycle failure")
+        self._attempt_in_cycle = 0
+        return SensorReading.from_values(
+            temperature=21.0,
+            humidity=45.0,
+            sensor_id=self.sensor_id,
+        )
+
+    async def _close_impl(self) -> None:
+        return None
+
+
+class AnomalySensor(BaseSensor):
+    """Always produces out-of-range readings."""
+
+    def __init__(self, *, anomaly_callback) -> None:
+        super().__init__(
+            sensor_id="anomaly",
+            failure_threshold=3,
+            max_retries=1,
+            retry_delay_seconds=0.0,
+            anomaly_callback=anomaly_callback,
+        )
+
+    async def _read_sensor(self) -> SensorReading:
+        return SensorReading.from_values(
+            temperature=120.0,
+            humidity=55.0,
+            sensor_id=self.sensor_id,
+        )
+
+    async def _close_impl(self) -> None:
+        return None
 
 
 def run(coro):
@@ -111,3 +166,50 @@ def test_close_marks_sensor_closed_and_is_idempotent() -> None:
 
     with pytest.raises(SensorClosedError):
         run(sensor.read())
+
+
+def test_failure_callback_triggers_once_per_sequence() -> None:
+    events = []
+
+    def on_failure(event):
+        events.append((event.failure_count, event.failure_threshold))
+
+    sensor = DummySensor(
+        failures_before_success=5,
+        max_retries=2,
+        failure_threshold=2,
+        failure_callback=on_failure,
+    )
+
+    with pytest.raises(SensorReadError):
+        run(sensor.read())
+
+    assert len(events) == 1
+    assert events[0] == (2, 2)
+
+
+def test_failure_callback_resets_after_success() -> None:
+    events = []
+
+    def on_failure(event):
+        events.append(event.failure_count)
+
+    sensor = CyclicFailureSensor(failure_callback=on_failure)
+
+    run(sensor.read())
+    run(sensor.read())
+
+    assert events == [2, 2]
+
+
+def test_anomaly_callback_receives_invalid_fields() -> None:
+    events = []
+
+    def on_anomaly(event):
+        events.append(event.invalid_fields)
+
+    sensor = AnomalySensor(anomaly_callback=on_anomaly)
+
+    run(sensor.read())
+
+    assert events == [("temperature",)]

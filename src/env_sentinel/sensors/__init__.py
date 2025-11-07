@@ -16,7 +16,7 @@ from .bme280 import (
     _load_pi_dependencies as _load_bme280_dependencies,
 )
 from .factory import SensorBuilder, SensorFactory, SensorFactoryError
-from .models import SensorReading
+from .models import SensorAnomalyEvent, SensorFailureEvent, SensorReading
 
 __all__ = [
     "BaseSensor",
@@ -24,11 +24,13 @@ __all__ = [
     "BME280DriverFactory",
     "BME280Sample",
     "BME280Sensor",
+    "SensorAnomalyEvent",
     "SensorBuilder",
     "SensorClosedError",
     "SensorError",
     "SensorFactory",
     "SensorFactoryError",
+    "SensorFailureEvent",
     "SensorReadError",
     "SensorReading",
     "DEFAULT_BME280_BUILDER",

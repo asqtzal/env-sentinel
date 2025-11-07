@@ -122,6 +122,7 @@ class BME280Sensor(BaseSensor):
   - `SimulatedBME280Driver`: デフォルトの決定論的サンプル。  
   - `RaspberryPiBME280Driver`: Adafruit CircuitPython (`board`, `busio`, `adafruit_bme280`) を動的ロードし、I2C（`SensorConfig.i2c_address`）から読み取り。  
 - **SensorFactory**: `SensorFactory` + `DEFAULT_BME280_BUILDER` / `RASPBERRY_PI_BME280_BUILDER` を介して Config 駆動でセンサ生成。`create_default_sensor_factory(prefer_hardware=None)` は環境に応じて自動判定。  
+- **Event Hooks**: `SensorFailureEvent`（連続失敗閾値超過）と `SensorAnomalyEvent`（`SensorReading.invalid_fields` が発生）を `failure_callback` / `anomaly_callback` で購読でき、Monitoring/Alert モジュールに通知できる。
 
 **安全機構**:
 - 3回連続失敗でセンサ故障判定、`health_check()` が False を返す。

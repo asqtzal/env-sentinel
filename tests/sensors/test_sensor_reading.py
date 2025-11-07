@@ -19,6 +19,7 @@ def test_validate_accepts_valid_values() -> None:
 
     assert reading.validate() is True
     assert reading.is_valid is True
+    assert reading.invalid_fields == ()
 
 
 def test_validate_corrects_with_previous_reading() -> None:
@@ -40,6 +41,7 @@ def test_validate_corrects_with_previous_reading() -> None:
     assert current.temperature == previous.temperature
     assert current.humidity == previous.humidity
     assert current.is_valid is False
+    assert current.invalid_fields == ("temperature", "humidity")
 
 
 def test_from_values_sets_timestamp_and_id() -> None:
@@ -48,3 +50,14 @@ def test_from_values_sets_timestamp_and_id() -> None:
 
     assert reading.sensor_id == "sensor-b"
     assert reading.timestamp.tzinfo is UTC
+
+
+def test_validate_records_invalid_fields_without_previous() -> None:
+    reading = SensorReading(
+        timestamp=datetime.now(tz=UTC),
+        temperature=100.0,
+        humidity=40.0,
+    )
+
+    assert reading.validate(previous=None) is False
+    assert reading.invalid_fields == ("temperature",)
