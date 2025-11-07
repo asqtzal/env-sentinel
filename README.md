@@ -24,7 +24,7 @@
 
 ### 環境変数・設定ファイル
 - `ENV_SENTINEL_LOG_LEVEL`（任意）: `INFO`/`DEBUG` などのログレベルを指定。
-- 設定ファイルは `config/default_config.json` をベースに `config/app_config.json`（任意）などへコピーして編集。未作成の場合はデフォルト値が使用される予定。
+- 設定ファイルは `config/default_config.json` をベースに `config/app_config.json`（任意）などへコピーして編集。未作成の場合は `ConfigManager` がデフォルトを自動生成。
 - APIキーやSlackトークンは `.env` で管理し、コードに埋め込まない。
 
 ## コマンド一覧
@@ -40,6 +40,12 @@
 - 本プロジェクトはPythonアプリケーションのため、追加ビルド手順は不要です。
 - テストは `pytest` で実行します。仮想環境を有効化し、`pytest` を実行してください。
 - CI/CDでは `pytest` 実行と `black` / `flake8` / `mypy` を順次追加予定です。
+
+## 設定管理
+- `ConfigManager` が設定ファイルのロード/保存/ホットリロード/フォールバックを担当します。
+- 基本利用例: `ConfigManager(Path("config/app_config.json"), Path("config/default_config.json")).load()`
+- `start_polling()` でバックグラウンド監視可能。`fallback_callback` で異常検知時の通知を挿入できます。
+- 詳細は `docs/guides/config_manager.md` を参照。
 
 ## 技術スタック
 
@@ -59,3 +65,4 @@
 - `.kiro/steering/` : プロダクト方針、コーディング規約、セキュリティ指針
 - `docs/reference/config_parameters.md` : 設定パラメータ一覧とデフォルト値
 - `docs/tasks/task_2_config.md` : 設定モジュールに関するタスク分解
+- `docs/guides/config_manager.md` : ConfigManager の使い方と監視/フォールバック手順

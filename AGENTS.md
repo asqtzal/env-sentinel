@@ -20,6 +20,7 @@
 ### プロジェクト内ドキュメント
 - `docs/reference/config_parameters.md`: 設定パラメータの一覧とデフォルト/制約の整理。
 - `docs/tasks/task_2_config.md`: 設定モジュール実装タスクの詳細な分解。
+- `docs/guides/config_manager.md`: ConfigManager の使い方、ホットリロード手順、フォールバック挙動の説明。
 
 ## メンテナンスポリシー（Maintenance policy）
 
