@@ -148,8 +148,8 @@ class AlertManager:
 
 **アラートレベル**:
 - **INFO**: 定期レポート
-- **WARNING**: 推奨範囲外（18℃未満、26℃超、湿度40%未満、60%超）
-- **CRITICAL**: 極端値（10℃未満、35℃超）
+- **WARNING**: 推奨範囲外（温度18℃未満/26℃超、湿度40%未満/60%超）
+- **CRITICAL**: 極端値（温度10℃未満/35℃超、湿度1%未満/99%以上 ※設定で変更可）
 - **EMERGENCY**: センサ故障、システム障害
 
 ### 3. Notification Module
@@ -270,7 +270,7 @@ CREATE INDEX idx_sensor_readings_timestamp
   },
   "alerts": {
     "temperature": {"min": 18, "max": 26, "critical_min": 10, "critical_max": 35},
-    "humidity": {"min": 40, "max": 60}
+    "humidity": {"min": 40, "max": 60, "critical_min": 1, "critical_max": 99}
   },
   "notifications": {
     "slack": {

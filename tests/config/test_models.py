@@ -47,6 +47,14 @@ def test_humidity_threshold_requires_min_lower_than_max() -> None:
         HumidityThreshold(min=60.0, max=40.0)
 
 
+def test_humidity_threshold_requires_critical_outside_nominal() -> None:
+    """Critical humidity thresholds must surround nominal range."""
+    with pytest.raises(ValidationError):
+        HumidityThreshold(min=40.0, max=60.0, critical_min=40.0)
+    with pytest.raises(ValidationError):
+        HumidityThreshold(min=40.0, max=60.0, critical_max=60.0)
+
+
 def test_slack_channel_must_start_with_hash() -> None:
     """Slack channels must include the # prefix."""
     with pytest.raises(ValidationError):

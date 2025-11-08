@@ -12,6 +12,8 @@
 | alerts.temperature | `critical_max` | float (35.0) | 35.0 | `max` 超。即時アラート閾値。 |
 | alerts.humidity | `min` | float (40.0) | 40.0 | 20〜60%。推奨範囲下限。 |
 | alerts.humidity | `max` | float (60.0) | 60.0 | 40〜80%。推奨範囲上限。 |
+| alerts.humidity | `critical_min` | float (1.0) | 1.0 | `min` 未満。即時アラート閾値。 |
+| alerts.humidity | `critical_max` | float (99.0) | 99.0 | `max` 超。即時アラート閾値。 |
 | notifications.slack | `channel` | str (`"#baby-room"`) | `#baby-room` | Slackチャンネル名。 |
 | notifications.slack | `report_interval_seconds` | int (1800) | 1800 | 300〜7200秒。定期レポート間隔。 |
 | notifications.slack | `rate_limit_per_minute` | int (1) | 1 | 1〜5件/分。過剰通知防止。 |

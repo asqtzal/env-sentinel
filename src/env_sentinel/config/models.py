@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from pathlib import Path
 from typing import Any, Dict
 
@@ -65,14 +67,30 @@ class HumidityThreshold(BaseModel):
 
     min: float = Field(default=40.0, ge=0.0, le=100.0)
     max: float = Field(default=60.0, ge=0.0, le=100.0)
+    critical_min: float = Field(default=1.0, ge=0.0, le=100.0)
+    critical_max: float = Field(default=99.0, ge=0.0, le=100.0)
 
     @root_validator
     def validate_bounds(cls, values: Dict[str, float]) -> Dict[str, float]:
-        """Ensure humidity min < max."""
+        """Ensure humidity min/max and critical ranges are logically ordered."""
         min_value = values.get("min")
         max_value = values.get("max")
+        critical_min = values.get("critical_min")
+        critical_max = values.get("critical_max")
         if min_value is not None and max_value is not None and min_value >= max_value:
             raise ValueError("humidity.min must be lower than humidity.max")
+        if (
+            critical_min is not None
+            and min_value is not None
+            and critical_min >= min_value
+        ):
+            raise ValueError("humidity.critical_min must be lower than humidity.min")
+        if (
+            critical_max is not None
+            and max_value is not None
+            and critical_max <= max_value
+        ):
+            raise ValueError("humidity.critical_max must be higher than humidity.max")
         return values
 
 
@@ -149,4 +167,4 @@ class AppConfig(BaseModel):
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the configuration to a dictionary."""
-        return self.dict()
+        return json.loads(self.json())

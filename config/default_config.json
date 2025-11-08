@@ -14,7 +14,9 @@
     },
     "humidity": {
       "min": 40.0,
-      "max": 60.0
+      "max": 60.0,
+      "critical_min": 1.0,
+      "critical_max": 99.0
     }
   },
   "notifications": {
