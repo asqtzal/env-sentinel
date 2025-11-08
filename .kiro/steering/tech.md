@@ -45,7 +45,8 @@ fileMatchPattern: '**/env-sentinel/**'
     ```bash
     pip install adafruit-circuitpython-bme280 adafruit-blinka
     ```
-- **Factory Wiring**: `create_default_sensor_factory(prefer_hardware=None)` が自動で適切なビルダーを選択。ハードウェア強制時は `prefer_hardware=True` を渡すか `RASPBERRY_PI_BME280_BUILDER` を明示登録する。
+- **Factory Wiring**: `create_default_sensor_factory(prefer_hardware=None)` が、Adafruit依存がロード可能かをチェックして自動で実機/シミュレータを切り替える。ハードウェアを強制したい場合のみ `prefer_hardware=True` や `RASPBERRY_PI_BME280_BUILDER` の明示登録が必要。
+- **Python 3.9 互換性**: Raspberry Pi OS 標準の Python 3.9 では `datetime.UTC` や `dataclass(slots=True)` が未サポートのため、`timezone.utc` フォールバックと通常の `@dataclass` を使用している。新しい構文を追加する際は 3.9 で動作するか確認すること。
 
 ## Technical Constraints
 - **Resource Limits**: CPU 10%以下、メモリ 100MB以下

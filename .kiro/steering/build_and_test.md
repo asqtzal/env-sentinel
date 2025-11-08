@@ -54,6 +54,23 @@ fileMatchPattern: '**/env-sentinel/**'
 - Red-Green-Refactorサイクル
 - 最低80%のテストカバレッジ
 
+### 実機テスト（Raspberry Pi + BME280）
+1. 依存インストール  
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements-dev.txt
+   pip install adafruit-circuitpython-bme280 adafruit-blinka
+   ```
+2. I2C を有効化し `i2cdetect -y 1` でアドレス（0x76/0x77）を確認し、`sensor.i2c_address` と一致させる。  
+3. ハードウェア向けテストコマンド  
+   ```bash
+   python -m pytest tests/sensors/test_bme280_sensor.py
+   python -m pytest tests/sensors/test_bme280_sensor.py -k "raspberry" --maxfail=1 -vv
+   ```
+   `create_default_sensor_factory()` が Adafruit ライブラリの有無で自動的に実機ドライバを選択するため、追加の切り替え操作は不要。  
+4. 実機テスト結果と使用した commit hash を `docs/tasks/task_3_sensors.md` に記録する。
+
 ## Code Quality Standards
 
 ### Automated Checks
