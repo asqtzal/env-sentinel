@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 import inspect
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable, Optional, Union
 
 from env_sentinel.sensors.models import (
     SensorAnomalyEvent,
@@ -15,8 +15,8 @@ from env_sentinel.sensors.models import (
 from env_sentinel.utils.logger import get_logger
 
 
-FailureCallback = Callable[[SensorFailureEvent], Optional[Awaitable[None]] | None]
-AnomalyCallback = Callable[[SensorAnomalyEvent], Optional[Awaitable[None]] | None]
+FailureCallback = Callable[[SensorFailureEvent], Union[Optional[Awaitable[None]], None]]
+AnomalyCallback = Callable[[SensorAnomalyEvent], Union[Optional[Awaitable[None]], None]]
 
 
 class SensorError(RuntimeError):
