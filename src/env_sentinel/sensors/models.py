@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
+try:  # Python 3.11+
+    from datetime import UTC
+except ImportError:  # Python 3.9 compatibility
+    from datetime import timezone
+
+    UTC = timezone.utc  # type: ignore[assignment]
 from typing import Optional
 
 TEMPERATURE_MIN = -40.0
