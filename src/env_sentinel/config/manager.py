@@ -67,10 +67,8 @@ class ConfigManager:
         """Persist the provided configuration to disk."""
         with self._lock:
             target_config = config or self._config
-            self._config_path.write_text(
-                json.dumps(target_config.to_dict(), indent=2),
-                encoding="utf-8",
-            )
+            serialized = json.dumps(target_config.to_dict(), indent=2, default=str)
+            self._config_path.write_text(serialized, encoding="utf-8")
             self._last_modified = self._config_path.stat().st_mtime
             logger.debug("Configuration saved to %s", self._config_path)
 

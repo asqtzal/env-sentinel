@@ -25,6 +25,7 @@
     }
   },
   "storage": {
+    "db_path": "data/env_sentinel.db",
     "local_retention_days": 90,
     "cloud_sync_interval_seconds": 300,
     "cloud_provider": "aws"

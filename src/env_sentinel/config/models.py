@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict
 
 from pydantic import BaseModel, Field, root_validator, validator
@@ -106,9 +107,19 @@ class NotificationsConfig(BaseModel):
 class StorageConfig(BaseModel):
     """Storage behavior configuration."""
 
+    db_path: Path = Field(default=Path("data/env_sentinel.db"))
     local_retention_days: int = Field(default=90, ge=1, le=365)
     cloud_sync_interval_seconds: int = Field(default=300, ge=60, le=3600)
     cloud_provider: str = Field(default="aws")
+
+    @validator("db_path", pre=True)
+    def validate_db_path(cls, value: Any) -> Path:
+        """Ensure the db path is present and normalized."""
+        if value in (None, "", " "):
+            raise ValueError("db_path must not be empty")
+        if isinstance(value, Path):
+            return value
+        return Path(str(value))
 
     @validator("cloud_provider")
     def validate_provider(cls, value: str) -> str:

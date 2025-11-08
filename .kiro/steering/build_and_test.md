@@ -40,6 +40,7 @@ fileMatchPattern: '**/env-sentinel/**'
 | `flake8` | スタイル/静的解析 |
 | `mypy` | 型検査 |
 | `pytest --maxfail=1 -q` | 軽量検証（PR前など） |
+| `source .venv/bin/activate && python -m pytest tests/storage/test_local_storage.py` | LocalStorageモジュール専用テスト（retention・スキーマ健全性） |
 
 ## Testing Strategy
 
@@ -48,6 +49,7 @@ fileMatchPattern: '**/env-sentinel/**'
 - **Integration Tests**: モジュール間の統合テスト
 - **Hardware Tests**: 実際のセンサとの統合テスト
 - **Mock Tests**: ハードウェアなしでの開発テスト
+- **Storage Regression**: SQLiteスキーマ/保持期間/health-checkを保証する `tests/storage/test_local_storage.py`
 
 ### Test-Driven Development
 - 機能実装前にテストを作成

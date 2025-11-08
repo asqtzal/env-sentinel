@@ -193,14 +193,26 @@ class IoTNotifier(BaseNotifier):  # Phase 2で実装
 **Phase 1 Implementation**:
 ```python
 class LocalStorage:
+    async def initialize(self) -> None:
+        # SQLiteファイル作成、WAL有効化、メタデータテーブルとsensor_readingsテーブルをマイグレート
+        ...
+
     async def store_reading(self, reading: SensorReading) -> bool:
-        # ローカルSQLiteに保存
-        # 可視化用の高速アクセス
-        pass
+        # 非同期接続経由でINSERT。invalid_fieldsやsynced_to_cloudを含む
+        # INSERT後にretention日数を超過した行をクリーンアップ
+        ...
     
-    async def get_recent_data(self, hours: int) -> List[SensorReading]:
-        # 直近データの取得（グラフ生成用）
-        pass
+    async def get_recent_data(self, hours: int, limit: Optional[int] = None) -> List[SensorReading]:
+        # UTC基準で期間フィルタし、降順 + 任意limit付きで取得
+        ...
+
+    async def purge_expired_data(self) -> int:
+        # retention日数に基づくDELETEを行い、削除件数を返す
+        ...
+
+    async def health_check(self) -> dict[str, int | str]:
+        # schema_versionをstorage_metadataから読み出し、SELECT 1で疎通確認
+        ...
 ```
 
 **Phase 2 Implementation**:
@@ -222,15 +234,26 @@ class HybridStorage:
 
 **データモデル**:
 ```sql
+CREATE TABLE storage_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE TABLE sensor_readings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp DATETIME NOT NULL,
+    timestamp TEXT NOT NULL,
     temperature REAL NOT NULL,
     humidity REAL NOT NULL,
     pressure REAL,
     sensor_id TEXT NOT NULL,
-    synced_to_cloud BOOLEAN DEFAULT FALSE
+    is_valid INTEGER NOT NULL,
+    invalid_fields TEXT NOT NULL,
+    synced_to_cloud INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_sensor_readings_timestamp
+    ON sensor_readings (timestamp);
 ```
 
 ### 5. Configuration Module
@@ -257,6 +280,7 @@ CREATE TABLE sensor_readings (
     }
   },
   "storage": {
+    "db_path": "data/env_sentinel.db",
     "local_retention_days": 90,
     "cloud_sync_interval_seconds": 300,
     "cloud_provider": "aws"
