@@ -74,7 +74,7 @@ class SensorReading:
         )
 
 
-@dataclass(slots=True)
+@dataclass
 class SensorFailureEvent:
     """Event emitted when a sensor exceeds the configured failure threshold."""
 
@@ -84,7 +84,7 @@ class SensorFailureEvent:
     last_error: Optional[Exception]
 
 
-@dataclass(slots=True)
+@dataclass
 class SensorAnomalyEvent:
     """Event emitted when a reading contains invalid/adjusted values."""
 

@@ -15,7 +15,7 @@ from .factory import SensorBuilder
 from .models import SensorReading
 
 
-@dataclass(slots=True)
+@dataclass
 class BME280Sample:
     """Structured reading returned by a BME280 driver."""
 
