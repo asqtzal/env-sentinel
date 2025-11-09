@@ -146,6 +146,10 @@ class AlertManager:
         pass
 ```
 
+- **状態遷移**: 温度/湿度ごとに現在状態（NORMAL / WARNING_LOW / WARNING_HIGH / CRITICAL_LOW / CRITICAL_HIGH）を保持し、状態が変化した瞬間のみアラートを生成する。連投は行わず、推奨レンジへ戻ったタイミングで「✅ 正常化」を個別に通知。
+- **センサイベント統合**: `SensorFailureEvent` / `SensorAnomalyEvent` を Monitoring 層で受け取り、`Alert(level=EMERGENCY, category=SENSOR, ...)` に変換して通知層へ渡す。これにより Task 6 は Alert に対してメンション有無を切り替えるだけで良い。
+- **Listener API**: `AlertManager.register_listener()` で通知モジュールなどが購読し、最新 Alert 履歴 (`get_recent_alerts(limit=N)`) も取得できる。
+
 **アラートレベル**:
 - **INFO**: 定期レポート
 - **WARNING**: 推奨範囲外（温度18℃未満/26℃超、湿度40%未満/60%超）
