@@ -8,6 +8,7 @@ from .models import (
     NotificationsConfig,
     SensorConfig,
     SlackConfig,
+    SlackMentionPolicy,
     StorageConfig,
     TemperatureThreshold,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "NotificationsConfig",
     "SensorConfig",
     "SlackConfig",
+    "SlackMentionPolicy",
     "StorageConfig",
     "TemperatureThreshold",
     "ConfigManager",

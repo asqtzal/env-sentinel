@@ -47,6 +47,32 @@
 - `start_polling()` でバックグラウンド監視可能。`fallback_callback` で異常検知時の通知を挿入できます。
 - 詳細は `docs/guides/config_manager.md` を参照。
 
+## アプリケーション起動例
+```python
+import asyncio
+from pathlib import Path
+
+from env_sentinel.config import ConfigManager
+from env_sentinel.core import EnvSentinelApp
+
+async def main() -> None:
+    manager = ConfigManager(
+        config_path=Path("config/app_config.json"),
+        default_path=Path("config/default_config.json"),
+    )
+    app = EnvSentinelApp(manager)
+    await app.start()
+
+    # ... センサループや監視処理を実装 ...
+
+    await app.stop()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+- 簡易起動（MonitoringLoop + Configホットリロード込み）: `python -m env_sentinel.app`  
+  `.env` に `ENV_SENTINEL_SLACK_BOT_TOKEN`（Slack Bot Token）や `ENV_SENTINEL_LOG_LEVEL` を定義しておくと、起動と同時に Slack 通知・センサ読み取り・設定再適用が行われます。`config/app_config.json` を編集して保存すると、通知設定やセンサ読み取り間隔/I2Cアドレスの変更が自動的に反映されます。
+
 ## 技術スタック
 
 | カテゴリ | ライブラリ / ツール | 概要 | バージョン例 |
@@ -66,4 +92,5 @@
 - `docs/reference/config_parameters.md` : 設定パラメータ一覧とデフォルト値
 - `docs/tasks/task_2_config.md` : 設定モジュールに関するタスク分解
 - `docs/guides/config_manager.md` : ConfigManager の使い方と監視/フォールバック手順
+- `docs/guides/notification_system.md` : Slack通知基盤（NotificationRuntime/Coordinator）の構成と運用方法
 - `docs/TODO.md` : ドキュメント整備やテスト方針メモなど横断的TODO

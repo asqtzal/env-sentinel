@@ -76,6 +76,13 @@ class AlertManager:
         """Register a callback invoked whenever an alert is emitted."""
         self._listeners.append(listener)
 
+    def unregister_listener(self, listener: AlertListener) -> None:
+        """Remove a previously registered listener if present."""
+        try:
+            self._listeners.remove(listener)
+        except ValueError:
+            return
+
     def get_recent_alerts(self, limit: Optional[int] = None) -> list[Alert]:
         """Return the most recent alerts, newest last."""
         items = list(self._history)

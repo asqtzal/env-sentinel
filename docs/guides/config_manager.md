@@ -45,6 +45,21 @@ manager.load()
 manager.start_polling()
 ```
 
+### EnvSentinelApp との連携
+- `set_reload_callback()` を使用すると、初期化後でもリロード時のコールバックを差し替えできます。
+- 例えば `EnvSentinelApp` に設定変更を伝播させる場合は以下のようにします。
+
+```python
+from env_sentinel.config import ConfigManager
+from env_sentinel.core import EnvSentinelApp
+
+manager = ConfigManager(Path("config/app_config.json"), Path("config/default_config.json"))
+app = EnvSentinelApp(manager)  # __init__ 内で config_manager にコールバックが登録される
+
+# もしくは明示的に差し替えたい場合
+manager.set_reload_callback(app.handle_config_reload)
+```
+
 ## フォールバックと通知
 - 無効な設定が保存された場合、`ValidationError` を検知してデフォルト値へ自動復帰します。
 - `fallback_callback` を渡すと、Slack通知の作成など異常検知時の処理を差し込めます。

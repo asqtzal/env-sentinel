@@ -14,8 +14,11 @@ from env_sentinel.config import (
     HumidityThreshold,
     SensorConfig,
     SlackConfig,
+    SlackMentionPolicy,
     TemperatureThreshold,
 )
+
+from env_sentinel.config.manager import ConfigManager
 
 
 def test_app_config_defaults_matches_file() -> None:
@@ -59,3 +62,40 @@ def test_slack_channel_must_start_with_hash() -> None:
     """Slack channels must include the # prefix."""
     with pytest.raises(ValidationError):
         SlackConfig(channel="baby-room")
+
+
+def test_slack_custom_mentions_require_targets() -> None:
+    """Custom mention policy must include at least one user."""
+    with pytest.raises(ValidationError):
+        SlackConfig(alert_mention_policy=SlackMentionPolicy.CUSTOM, alert_mention_targets=[])
+
+
+def test_slack_non_custom_policy_allows_empty_targets() -> None:
+    """Predefined mention policies may omit explicit targets."""
+    config = SlackConfig(alert_mention_policy=SlackMentionPolicy.NONE, alert_mention_targets=[])
+    assert config.alert_mention_targets == []
+
+
+def test_config_manager_reload_callback(tmp_path) -> None:
+    """Reload callback can be attached after instantiation."""
+    config_path = tmp_path / "app_config.json"
+    default_path = Path("config/default_config.json")
+    config_path.write_text(default_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+    manager = ConfigManager(config_path=config_path, default_path=default_path)
+    manager.load()
+
+    triggered: list[AppConfig] = []
+
+    def on_reload(new_config: AppConfig) -> None:
+        triggered.append(new_config)
+
+    manager.set_reload_callback(on_reload)
+
+    updated = AppConfig.defaults().copy(
+        update={"sensor": {"read_interval_seconds": 120}}
+    )
+    config_path.write_text(json.dumps(updated.to_dict()), encoding="utf-8")
+
+    assert manager.reload_if_updated() is True
+    assert triggered and triggered[0].sensor.read_interval_seconds == 120

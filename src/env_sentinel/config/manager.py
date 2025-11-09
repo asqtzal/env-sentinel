@@ -111,6 +111,11 @@ class ConfigManager:
         if self._watcher_thread:
             self._watcher_thread.join(timeout=self._poll_interval_seconds * 2)
 
+    def set_reload_callback(self, callback: Optional[Callable[[AppConfig], None]]) -> None:
+        """Update the callback invoked after successful reloads."""
+        with self._lock:
+            self._on_reload = callback
+
     def _watch_loop(self) -> None:
         """Polling loop for configuration reloads."""
         while not self._stop_event.is_set():

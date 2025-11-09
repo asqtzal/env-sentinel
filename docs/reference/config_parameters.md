@@ -17,6 +17,8 @@
 | notifications.slack | `channel` | str (`"#baby-room"`) | `#baby-room` | Slackチャンネル名。 |
 | notifications.slack | `report_interval_seconds` | int (1800) | 1800 | 300〜7200秒。定期レポート間隔。 |
 | notifications.slack | `rate_limit_per_minute` | int (1) | 1 | 1〜5件/分。過剰通知防止。 |
+| notifications.slack | `alert_mention_policy` | str (`"custom"`) | `custom` | `none`/`here`/`channel`/`custom`。アラート通知時のメンション方式。 |
+| notifications.slack | `alert_mention_targets` | list[str] (`["U0000000000"]`) | `["U0000000000"]` | `custom` 時にメンションする Slack ユーザーID（`<@...>` 形式も可）。 |
 | storage | `db_path` | str (`"data/env_sentinel.db"`) | `data/env_sentinel.db` | SQLiteファイルの保存場所。存在しない場合は自動生成。 |
 | storage | `local_retention_days` | int (90) | 90 | 1〜365日。ローカル保持期間。 |
 | storage | `cloud_sync_interval_seconds` | int (300) | 300 | 60〜3600秒。クラウド同期間隔。 |

@@ -89,6 +89,14 @@ class BaseSensor(ABC):
         self._failure_reported = False
         self._logger = get_logger(f"{self.__class__.__module__}.{self.__class__.__name__}")
 
+    def set_failure_callback(self, callback: FailureCallback | None) -> None:
+        """Register or replace the failure callback."""
+        self._failure_callback = callback
+
+    def set_anomaly_callback(self, callback: AnomalyCallback | None) -> None:
+        """Register or replace the anomaly callback."""
+        self._anomaly_callback = callback
+
     async def __aenter__(self) -> "BaseSensor":
         self._ensure_open()
         return self

@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 
 from pathlib import Path
-from typing import Any, Dict
+from enum import Enum
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, root_validator, validator
 
@@ -101,12 +102,23 @@ class AlertConfig(BaseModel):
     humidity: HumidityThreshold = Field(default_factory=HumidityThreshold)
 
 
+class SlackMentionPolicy(str, Enum):
+    """Allowed mention strategies for Slack notifications."""
+
+    NONE = "none"
+    HERE = "here"
+    CHANNEL = "channel"
+    CUSTOM = "custom"
+
+
 class SlackConfig(BaseModel):
     """Slack notification settings."""
 
     channel: str = Field(default="#baby-room", min_length=1)
     report_interval_seconds: int = Field(default=1800, ge=300, le=7200)
     rate_limit_per_minute: int = Field(default=1, ge=1, le=5)
+    alert_mention_policy: SlackMentionPolicy = Field(default=SlackMentionPolicy.CUSTOM)
+    alert_mention_targets: List[str] = Field(default_factory=lambda: ["U0000000000"])
 
     @validator("channel")
     def validate_channel(cls, value: str) -> str:
@@ -114,6 +126,15 @@ class SlackConfig(BaseModel):
         if not value.startswith("#"):
             raise ValueError("Slack channel must start with '#'")
         return value
+
+    @root_validator
+    def validate_mention_targets(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure custom mention policy is accompanied by at least one user."""
+        policy = values.get("alert_mention_policy")
+        targets = values.get("alert_mention_targets") or []
+        if policy == SlackMentionPolicy.CUSTOM and not targets:
+            raise ValueError("alert_mention_targets must be set when mention policy is 'custom'")
+        return values
 
 
 class NotificationsConfig(BaseModel):

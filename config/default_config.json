@@ -23,7 +23,11 @@
     "slack": {
       "channel": "#baby-room",
       "report_interval_seconds": 1800,
-      "rate_limit_per_minute": 1
+      "rate_limit_per_minute": 1,
+      "alert_mention_policy": "custom",
+      "alert_mention_targets": [
+        "U0000000000"
+      ]
     }
   },
   "storage": {

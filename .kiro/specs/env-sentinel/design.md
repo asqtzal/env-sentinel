@@ -191,6 +191,20 @@ class IoTNotifier(BaseNotifier):  # Phase 2で実装
 - アラート: 警告レベル、具体的数値、推奨アクション
 - システム状態: 起動、停止、エラー、復旧
 
+#### NotificationRuntime / EnvSentinelApp
+- `NotificationRuntime` が SlackNotifier・NotificationCoordinator・ReportGenerator を組み立て、`AlertManager` と LocalStorage から最新値を取得して通知を行う。
+- `EnvSentinelApp` は ConfigManager / AlertManager / LocalStorage / NotificationRuntime / MonitoringLoop をまとめるオーケストレーション層。`python -m env_sentinel.app` で起動すると Config ホットリロードとセンサループが自動的に連携する。
+- Configリロード時は `NotificationRuntime.reload()` が旧コーディネータのリスナーを解除してから再構築し、通知重複やメモリリークを防ぐ。MonitoringLoop もセンサ設定変更を検知して自動再初期化する。
+
+#### Delivery Queue & Fallback
+- `NotificationQueue` は優先度付きキュー＋レートリミッタで Slack API への送信を直列化し、`notifications.slack.rate_limit_per_minute` を守る。
+- 送信に失敗したメッセージは `data/pending_notifications.json`（`NotificationFallbackStore`）に保留され、再起動/復旧時に再キューされる。これによりネットワーク障害やホットリロード中も通知が失われない。
+
+### 4. Monitoring Runtime
+- `MonitoringLoop` はセンサ工場で生成した `BaseSensor` を一定間隔でポーリングし、読み取り結果を LocalStorage へ保存した上で `AlertManager.evaluate_reading()` に渡す。
+- Config の `sensor` 設定（タイプ/I2Cアドレス/失敗閾値など）が変更されるとセンサをクローズして再生成し、読み取り間隔も次のサイクルで即時反映する。
+- センサからの `failure_callback` / `anomaly_callback` は AlertManager へ中継され、リスナーが重複しないよう開始・停止時に登録/解除を管理する。
+
 ### 4. Storage Module
 **責任**: 段階的なデータ永続化戦略
 
