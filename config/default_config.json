@@ -21,10 +21,10 @@
   },
   "notifications": {
     "slack": {
-      "channel": "#baby-room",
+      "channel": "#look-at-me",
       "report_interval_seconds": 1800,
       "rate_limit_per_minute": 1,
-      "alert_mention_policy": "custom",
+      "alert_mention_policy": "channel",
       "alert_mention_targets": [
         "U0000000000"
       ]
