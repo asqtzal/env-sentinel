@@ -51,7 +51,7 @@ class NotificationCoordinator:
         self._report_interval = report_interval_seconds
         self._report_generator = report_generator
         self._report_task: asyncio.Task[None] | None = None
-        self._report_stop = asyncio.Event()
+        self._report_stop: asyncio.Event | None = None
         self._logger = get_logger(__name__)
         self._alert_listener: AlertListener | None = None
         self._attached_manager: AlertManager | None = None
@@ -63,7 +63,8 @@ class NotificationCoordinator:
         if self._report_generator and self._report_interval:
             if self._report_task and not self._report_task.done():
                 return
-            self._report_stop.clear()
+            stop_event = self._ensure_report_stop()
+            stop_event.clear()
             self._report_task = asyncio.create_task(self._report_loop())
 
     async def stop(self) -> None:
@@ -71,9 +72,11 @@ class NotificationCoordinator:
         if self._queue:
             await self._queue.stop()
         if self._report_task:
-            self._report_stop.set()
+            if self._report_stop:
+                self._report_stop.set()
             await self._report_task
             self._report_task = None
+            self._report_stop = None
         self._detach_alert_listener()
 
     def attach_alert_manager(self, manager: AlertManager) -> None:
@@ -198,6 +201,11 @@ class NotificationCoordinator:
         if self._attached_manager and self._alert_listener:
             self._attached_manager.unregister_listener(self._alert_listener)
         self._attached_manager = None
+
+    def _ensure_report_stop(self) -> asyncio.Event:
+        if self._report_stop is None:
+            self._report_stop = asyncio.Event()
+        return self._report_stop
 
     @staticmethod
     def _render_category(category: AlertCategory) -> str:

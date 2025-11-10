@@ -58,37 +58,41 @@ class NotificationQueue:
         self._notifier = notifier
         self._rate_limiter = rate_limiter
         self._fallback_store = fallback_store
-        self._queue: asyncio.PriorityQueue[Tuple[int, int, Optional[NotificationMessage]]] = (
-            asyncio.PriorityQueue()
-        )
+        self._queue: asyncio.PriorityQueue[Tuple[int, int, Optional[NotificationMessage]]] | None = None
         self._worker: Optional[asyncio.Task[None]] = None
-        self._stop_event = asyncio.Event()
+        self._stop_event: asyncio.Event | None = None
         self._logger = get_logger(__name__)
 
     async def start(self) -> None:
         """Start the background worker if not already running."""
         if self._worker and not self._worker.done():
             return
-        self._stop_event.clear()
+        queue = self._ensure_queue()
+        stop_event = self._ensure_stop_event()
+        stop_event.clear()
         self._worker = asyncio.create_task(self._run())
         await self._requeue_fallback_messages()
 
     async def stop(self) -> None:
         """Stop the background worker gracefully."""
-        if not self._worker:
+        if not self._worker or not self._queue or not self._stop_event:
             return
         await self._queue.put((0, next(_PRIORITY_COUNTER), None))
         self._stop_event.set()
         await self._worker
         self._worker = None
+        self._stop_event = None
 
     async def enqueue(self, message: NotificationMessage, priority: int = 0) -> None:
         """Add a message to the queue."""
+        if not self._queue or not self._worker:
+            raise RuntimeError("NotificationQueue must be started before enqueueing messages")
         await self._queue.put((-priority, next(_PRIORITY_COUNTER), message))
 
     async def _run(self) -> None:
+        queue = self._queue or self._ensure_queue()
         while True:
-            priority, _, message = await self._queue.get()
+            priority, _, message = await queue.get()
             if message is None:
                 break
             try:
@@ -99,16 +103,27 @@ class NotificationQueue:
                 if self._fallback_store:
                     await self._fallback_store.append(message)
             finally:
-                self._queue.task_done()
+                queue.task_done()
 
     async def _requeue_fallback_messages(self) -> None:
         if not self._fallback_store:
             return
+        queue = self._queue or self._ensure_queue()
         pending = await self._fallback_store.consume()
         for message in pending:
-            await self._queue.put((-3, next(_PRIORITY_COUNTER), message))
+            await queue.put((-3, next(_PRIORITY_COUNTER), message))
         if pending:
             self._logger.info("Requeued %s pending notification(s)", len(pending))
+
+    def _ensure_queue(self) -> asyncio.PriorityQueue[Tuple[int, int, Optional[NotificationMessage]]]:
+        if self._queue is None:
+            self._queue = asyncio.PriorityQueue()
+        return self._queue
+
+    def _ensure_stop_event(self) -> asyncio.Event:
+        if self._stop_event is None:
+            self._stop_event = asyncio.Event()
+        return self._stop_event
 
 
 __all__ = ["FixedWindowRateLimiter", "NotificationQueue", "RateLimiter"]

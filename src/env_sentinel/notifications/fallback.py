@@ -23,18 +23,20 @@ class NotificationFallbackStore:
 
     def __init__(self, path: Path | str = Path("data/pending_notifications.json")) -> None:
         self._path = Path(path)
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
 
     async def append(self, message: NotificationMessage) -> None:
         """Persist a notification for later retry."""
-        async with self._lock:
+        lock = self._ensure_lock()
+        async with lock:
             payloads = await self._read_all()
             payloads.append(self._serialize(message))
             await self._write(payloads)
 
     async def consume(self) -> list[NotificationMessage]:
         """Return and remove all stored notifications."""
-        async with self._lock:
+        lock = self._ensure_lock()
+        async with lock:
             payloads = await self._read_all()
             if not payloads:
                 return []
@@ -56,6 +58,11 @@ class NotificationFallbackStore:
     async def _remove(self) -> None:
         if self._path.exists():
             await asyncio.to_thread(self._path.unlink)
+
+    def _ensure_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     @staticmethod
     def _serialize(message: NotificationMessage) -> dict[str, Any]:

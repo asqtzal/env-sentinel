@@ -71,7 +71,7 @@ class LocalStorage:
     ) -> None:
         self._db_path = Path(db_path)
         self._retention_days = retention_days
-        self._lock = asyncio.Lock()
+        self._lock: asyncio.Lock | None = None
         self._initialized = False
 
     @classmethod
@@ -84,7 +84,8 @@ class LocalStorage:
 
     async def initialize(self) -> None:
         """Create database directories and schema if needed."""
-        async with self._lock:
+        lock = self._get_lock()
+        async with lock:
             if self._initialized:
                 return
             self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -216,6 +217,11 @@ class LocalStorage:
         await self._ensure_initialized()
         async with aiosqlite.connect(self._db_path.as_posix()) as db:
             yield db
+
+    def _get_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     @staticmethod
     def _serialize_datetime(value: datetime) -> str:
