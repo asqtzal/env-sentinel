@@ -131,10 +131,20 @@ def _load_pi_dependencies() -> Tuple[ModuleType, Any, Any]:
                 "and 'adafruit-blinka' to be installed on the device.",
             ) from exc
 
-    sensor_cls = getattr(modules["adafruit_bme280"], "Adafruit_BME280_I2C", None)
-    if sensor_cls is None:  # pragma: no cover - sanity guard
-        raise RuntimeError("Adafruit_BME280_I2C class not available in adafruit_bme280 module")
+    sensor_cls = _resolve_sensor_class(modules["adafruit_bme280"])
     return modules["board"], modules["busio"], sensor_cls
+
+
+def _resolve_sensor_class(module: ModuleType):
+    """Return the I2C helper class irrespective of library layout."""
+    candidates = [
+        getattr(module, "Adafruit_BME280_I2C", None),
+        getattr(getattr(module, "advanced", None), "Adafruit_BME280_I2C", None),
+    ]
+    for candidate in candidates:
+        if candidate is not None:
+            return candidate
+    raise RuntimeError("Adafruit_BME280_I2C class not available in adafruit_bme280 module")
 
 
 def _parse_i2c_address(address: str) -> int:
