@@ -7,15 +7,16 @@ fileMatchPattern: '**/env-sentinel/**'
 
 ## High-Level Structure Principles
 - **src/**: メインのソースコード
+- **src/env_sentinel/core/**: アプリケーションオーケストレーション (`EnvSentinelApp`, `NotificationRuntime`, `MonitoringLoop`, CLI entry `app.py`)
 - **tests/**: テストコード（ソース構造を反映）
 - **config/**: 設定ファイル
 - **docs/**: ドキュメント
 - **scripts/**: 運用・デプロイスクリプト
 
 ## Module Organization Approach
-- **機能別分離**: センサ、通知、ストレージなど機能ごとにモジュール分割
-- **レイヤー分離**: データアクセス、ビジネスロジック、プレゼンテーション層の分離
-- **プラグイン対応**: 新機能を既存コードに影響なく追加可能な構造
+- **機能別分離**: センサ (`src/env_sentinel/sensors`)、通知 (`src/env_sentinel/notifications`)、ストレージ (`src/env_sentinel/storage`)、コアオーケストレーション (`src/env_sentinel/core`) など機能ごとに分割
+- **レイヤー分離**: データアクセス、ビジネスロジック（AlertManager/NotificationRuntime）、エントリポイント（`app.py`）を層別に整理
+- **プラグイン対応**: センサや通知チャネルはファクトリ/インターフェース経由で追加する
 
 ## Import Patterns
 ```python
@@ -39,5 +40,5 @@ from ..utils.logger import get_logger
 ## Architectural Decisions
 - **Modular Design**: 機能別にモジュールを分離
 - **Plugin Architecture**: インターフェースベースの拡張可能設計
-- **Configuration-Driven**: 設定ファイルによる動作制御
-- **Async-First**: 非同期処理を基本とした設計
+- **Configuration-Driven**: 設定ファイルによる動作制御 (`ConfigManager` + EnvSentinelApp)
+- **Async-First**: 非同期処理を基本とした設計（MonitoringLoop、NotificationRuntime、SlackNotifier）

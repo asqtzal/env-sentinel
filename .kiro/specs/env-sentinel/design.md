@@ -79,29 +79,55 @@ BME280 Sensor → Sensor Module → Data Validation → Local Storage
 ### 1. Sensor Module
 **責任**: センサからのデータ取得と検証
 
-**インターフェース**:
+**インターフェース実装状況**:
 ```python
 class BaseSensor(ABC):
+    def __init__(self, sensor_id: str, *, failure_threshold: int, max_retries: int, retry_delay_seconds: float):
+        self.sensor_id = sensor_id
+        ...
+
+    async def read(self) -> SensorReading:          # 共通リトライ + 異常値補正
+        reading = await self._read_sensor()
+        ...
+        return reading
+
+    async def close(self) -> None:                  # リソース解放
+        await self._close_impl()
+
+    async def health_check(self) -> bool:           # 故障閾値ベースでヘルス判断
+        return self.failure_count < self.failure_threshold and await self._perform_health_check()
+
+    async def on_read_success(self, reading: SensorReading) -> None: ...
+    async def on_read_failure(self, attempt: int, error: Exception) -> None: ...
+
     @abstractmethod
-    async def read_data(self) -> SensorReading:
-        pass
-    
+    async def _read_sensor(self) -> SensorReading: ...
     @abstractmethod
-    async def health_check(self) -> bool:
-        pass
+    async def _close_impl(self) -> None: ...
+
 
 class BME280Sensor(BaseSensor):
-    async def read_data(self) -> SensorReading:
-        # I2C通信でBME280からデータ取得
-        # データ妥当性検証
-        # SensorReadingオブジェクト生成
-        pass
+    def __init__(self, *, driver: BME280Driver, config: SensorConfig, sensor_id: str):
+        ...
+
+    async def _read_sensor(self) -> SensorReading:
+        sample = await self._driver.read_sample()
+        return SensorReading.from_values(...)
+
+    async def _close_impl(self) -> None:
+        await self._driver.close()
 ```
 
+- **Driver Abstraction**: `BME280Driver` / `BME280DriverFactory` で実機とシミュレータを差し替え。  
+  - `SimulatedBME280Driver`: デフォルトの決定論的サンプル。  
+  - `RaspberryPiBME280Driver`: Adafruit CircuitPython (`board`, `busio`, `adafruit_bme280`) を動的ロードし、I2C（`SensorConfig.i2c_address`）から読み取り。  
+- **SensorFactory**: `SensorFactory` + `DEFAULT_BME280_BUILDER` / `RASPBERRY_PI_BME280_BUILDER` を介して Config 駆動でセンサ生成。`create_default_sensor_factory(prefer_hardware=None)` は環境に応じて自動判定。  
+- **Event Hooks**: `SensorFailureEvent`（連続失敗閾値超過）と `SensorAnomalyEvent`（`SensorReading.invalid_fields` が発生）を `failure_callback` / `anomaly_callback` で購読でき、Monitoring/Alert モジュールに通知できる。
+
 **安全機構**:
-- 3回連続失敗でセンサ故障判定
-- 物理的に不可能な値の検出（-50℃〜100℃範囲外）
-- I2C通信エラーのハンドリング
+- 3回連続失敗でセンサ故障判定、`health_check()` が False を返す。
+- `SensorReading.validate(prev)` により物理範囲外の値は最後の正常値で補間し `is_valid=False` でマーキング。
+- I2C通信エラーは BaseSensor の共通リトライ (`max_retries`/`retry_delay_seconds`) で吸収し、失敗時は `SensorReadError` をraise。
 
 ### 2. Monitoring Module
 **責任**: 環境データの監視とアラート判定
@@ -120,10 +146,14 @@ class AlertManager:
         pass
 ```
 
+- **状態遷移**: 温度/湿度ごとに現在状態（NORMAL / WARNING_LOW / WARNING_HIGH / CRITICAL_LOW / CRITICAL_HIGH）を保持し、状態が変化した瞬間のみアラートを生成する。連投は行わず、推奨レンジへ戻ったタイミングで「✅ 正常化」を個別に通知。
+- **センサイベント統合**: `SensorFailureEvent` / `SensorAnomalyEvent` を Monitoring 層で受け取り、`Alert(level=EMERGENCY, category=SENSOR, ...)` に変換して通知層へ渡す。これにより Task 6 は Alert に対してメンション有無を切り替えるだけで良い。
+- **Listener API**: `AlertManager.register_listener()` で通知モジュールなどが購読し、最新 Alert 履歴 (`get_recent_alerts(limit=N)`) も取得できる。
+
 **アラートレベル**:
 - **INFO**: 定期レポート
-- **WARNING**: 推奨範囲外（18℃未満、26℃超、湿度40%未満、60%超）
-- **CRITICAL**: 極端値（10℃未満、35℃超）
+- **WARNING**: 推奨範囲外（温度18℃未満/26℃超、湿度40%未満/60%超）
+- **CRITICAL**: 極端値（温度10℃未満/35℃超、湿度1%未満/99%以上 ※設定で変更可）
 - **EMERGENCY**: センサ故障、システム障害
 
 ### 3. Notification Module
@@ -161,20 +191,46 @@ class IoTNotifier(BaseNotifier):  # Phase 2で実装
 - アラート: 警告レベル、具体的数値、推奨アクション
 - システム状態: 起動、停止、エラー、復旧
 
+#### NotificationRuntime / EnvSentinelApp
+- `NotificationRuntime` が SlackNotifier・NotificationCoordinator・ReportGenerator を組み立て、`AlertManager` と LocalStorage から最新値を取得して通知を行う。
+- `EnvSentinelApp` は ConfigManager / AlertManager / LocalStorage / NotificationRuntime / MonitoringLoop をまとめるオーケストレーション層。`python -m env_sentinel.app` で起動すると Config ホットリロードとセンサループが自動的に連携する。
+- Configリロード時は `NotificationRuntime.reload()` が旧コーディネータのリスナーを解除してから再構築し、通知重複やメモリリークを防ぐ。MonitoringLoop もセンサ設定変更を検知して自動再初期化する。
+
+#### Delivery Queue & Fallback
+- `NotificationQueue` は優先度付きキュー＋レートリミッタで Slack API への送信を直列化し、`notifications.slack.rate_limit_per_minute` を守る。
+- 送信に失敗したメッセージは `data/pending_notifications.json`（`NotificationFallbackStore`）に保留され、再起動/復旧時に再キューされる。これによりネットワーク障害やホットリロード中も通知が失われない。
+
+### 4. Monitoring Runtime
+- `MonitoringLoop` はセンサ工場で生成した `BaseSensor` を一定間隔でポーリングし、読み取り結果を LocalStorage へ保存した上で `AlertManager.evaluate_reading()` に渡す。
+- Config の `sensor` 設定（タイプ/I2Cアドレス/失敗閾値など）が変更されるとセンサをクローズして再生成し、読み取り間隔も次のサイクルで即時反映する。
+- センサからの `failure_callback` / `anomaly_callback` は AlertManager へ中継され、リスナーが重複しないよう開始・停止時に登録/解除を管理する。
+
 ### 4. Storage Module
 **責任**: 段階的なデータ永続化戦略
 
 **Phase 1 Implementation**:
 ```python
 class LocalStorage:
+    async def initialize(self) -> None:
+        # SQLiteファイル作成、WAL有効化、メタデータテーブルとsensor_readingsテーブルをマイグレート
+        ...
+
     async def store_reading(self, reading: SensorReading) -> bool:
-        # ローカルSQLiteに保存
-        # 可視化用の高速アクセス
-        pass
+        # 非同期接続経由でINSERT。invalid_fieldsやsynced_to_cloudを含む
+        # INSERT後にretention日数を超過した行をクリーンアップ
+        ...
     
-    async def get_recent_data(self, hours: int) -> List[SensorReading]:
-        # 直近データの取得（グラフ生成用）
-        pass
+    async def get_recent_data(self, hours: int, limit: Optional[int] = None) -> List[SensorReading]:
+        # UTC基準で期間フィルタし、降順 + 任意limit付きで取得
+        ...
+
+    async def purge_expired_data(self) -> int:
+        # retention日数に基づくDELETEを行い、削除件数を返す
+        ...
+
+    async def health_check(self) -> dict[str, int | str]:
+        # schema_versionをstorage_metadataから読み出し、SELECT 1で疎通確認
+        ...
 ```
 
 **Phase 2 Implementation**:
@@ -196,15 +252,26 @@ class HybridStorage:
 
 **データモデル**:
 ```sql
+CREATE TABLE storage_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE TABLE sensor_readings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp DATETIME NOT NULL,
+    timestamp TEXT NOT NULL,
     temperature REAL NOT NULL,
     humidity REAL NOT NULL,
     pressure REAL,
     sensor_id TEXT NOT NULL,
-    synced_to_cloud BOOLEAN DEFAULT FALSE
+    is_valid INTEGER NOT NULL,
+    invalid_fields TEXT NOT NULL,
+    synced_to_cloud INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_sensor_readings_timestamp
+    ON sensor_readings (timestamp);
 ```
 
 ### 5. Configuration Module
@@ -221,7 +288,7 @@ CREATE TABLE sensor_readings (
   },
   "alerts": {
     "temperature": {"min": 18, "max": 26, "critical_min": 10, "critical_max": 35},
-    "humidity": {"min": 40, "max": 60}
+    "humidity": {"min": 40, "max": 60, "critical_min": 1, "critical_max": 99}
   },
   "notifications": {
     "slack": {
@@ -231,6 +298,7 @@ CREATE TABLE sensor_readings (
     }
   },
   "storage": {
+    "db_path": "data/env_sentinel.db",
     "local_retention_days": 90,
     "cloud_sync_interval_seconds": 300,
     "cloud_provider": "aws"

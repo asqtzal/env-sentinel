@@ -1,0 +1,9 @@
+# Core runtime dependencies
+pydantic>=1.10.14,<1.11
+aiohttp>=3.9.0
+apscheduler>=3.10.4
+aiosqlite>=0.19.0
+slack_sdk>=3.27.0
+
+# Utilities
+python-dotenv>=1.0.0
