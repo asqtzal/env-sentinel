@@ -137,15 +137,42 @@ def _load_pi_dependencies() -> Tuple[ModuleType, Any, Any]:
 
 def _resolve_sensor_class(module: ModuleType):
     """Return the I2C helper class irrespective of library layout."""
-    candidates = [
-        getattr(module, "Adafruit_BME280_I2C", None),
-        getattr(getattr(module, "advanced", None), "Adafruit_BME280_I2C", None),
-        getattr(getattr(module, "basic", None), "Adafruit_BME280_I2C", None),
-    ]
-    for candidate in candidates:
+    for submodule in (None, "advanced", "basic"):
+        candidate = _load_candidate_class(module, submodule)
         if candidate is not None:
             return candidate
+    candidate = _scan_submodules_for_class(module)
+    if candidate is not None:
+        return candidate
     raise RuntimeError("Adafruit_BME280_I2C class not available in adafruit_bme280 module")
+
+
+def _load_candidate_class(module: ModuleType, submodule: str | None):
+    """Try to fetch Adafruit_BME280_I2C from a specific submodule."""
+    target = module
+    if submodule:
+        try:
+            target = importlib.import_module(f"{module.__name__}.{submodule}")
+        except ImportError:
+            return None
+    return getattr(target, "Adafruit_BME280_I2C", None)
+
+
+def _scan_submodules_for_class(module: ModuleType):
+    """Fallback: scan all submodules using pkgutil in case layout changes."""
+    if not hasattr(module, "__path__"):
+        return None
+    import pkgutil
+
+    for _, name, _ in pkgutil.iter_modules(module.__path__):
+        try:
+            submod = importlib.import_module(f"{module.__name__}.{name}")
+        except Exception:
+            continue
+        candidate = getattr(submod, "Adafruit_BME280_I2C", None)
+        if candidate is not None:
+            return candidate
+    return None
 
 
 def _parse_i2c_address(address: str) -> int:
