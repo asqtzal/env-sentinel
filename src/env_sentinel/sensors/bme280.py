@@ -140,6 +140,7 @@ def _resolve_sensor_class(module: ModuleType):
     candidates = [
         getattr(module, "Adafruit_BME280_I2C", None),
         getattr(getattr(module, "advanced", None), "Adafruit_BME280_I2C", None),
+        getattr(getattr(module, "basic", None), "Adafruit_BME280_I2C", None),
     ]
     for candidate in candidates:
         if candidate is not None:
