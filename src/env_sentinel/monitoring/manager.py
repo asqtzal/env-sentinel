@@ -205,9 +205,10 @@ class AlertManager:
         metric_label = "温度" if metric == "temperature" else "湿度"
         direction = "低下" if "LOW" in state.name else "上昇"
         subject = f"{metric}_{state.name.lower()}"
+        unit = "℃" if metric == "temperature" else "%"
         message = (
             f"⚠️ {metric_label}が許容範囲から{direction}しました: "
-            f"{getattr(reading, metric):.1f}"
+            f"{getattr(reading, metric):.1f}{unit}"
         )
         if level == AlertLevel.CRITICAL:
             message = message.replace("⚠️", "🚨", 1)
@@ -231,10 +232,11 @@ class AlertManager:
         metric_label = "温度" if metric == "temperature" else "湿度"
         cfg = self._config.temperature if metric == "temperature" else self._config.humidity
         subject = f"{metric}_normalized"
+        unit = "℃" if metric == "temperature" else "%"
         message = (
             f"✅ {metric_label}が正常範囲に戻りました "
-            f"({cfg.min}〜{cfg.max}{'℃' if metric == 'temperature' else '%'}) "
-            f"- 現在値 {getattr(reading, metric):.1f}"
+            f"({cfg.min}〜{cfg.max}{unit}) "
+            f"- 現在値 {getattr(reading, metric):.1f}{unit}"
         )
         return Alert(
             level=AlertLevel.INFO,
