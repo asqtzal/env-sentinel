@@ -21,7 +21,7 @@
   },
   "notifications": {
     "slack": {
-      "channel": "#look-at-me",
+      "channel": "#notify-weather",
       "report_interval_seconds": 1800,
       "rate_limit_per_minute": 1,
       "alert_mention_policy": "channel",
