@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Awaitable, Callable, Sequence
+from typing import Awaitable, Callable, Optional, Sequence
 
 from env_sentinel.config import SlackConfig, SlackMentionPolicy
 from env_sentinel.monitoring import Alert, AlertCategory, AlertLevel, AlertManager
@@ -21,7 +21,7 @@ from env_sentinel.notifications.models import (
 )
 from env_sentinel.utils.logger import get_logger
 
-AlertListener = Callable[[Alert], Awaitable[None] | None]
+AlertListener = Callable[[Alert], Optional[Awaitable[None]]]
 
 ALERT_EMOJI = {
     AlertLevel.INFO: "ℹ️",
