@@ -73,6 +73,37 @@ if __name__ == "__main__":
 - 簡易起動（MonitoringLoop + Configホットリロード込み）: `python -m env_sentinel.app`  
   `.env` に `ENV_SENTINEL_SLACK_BOT_TOKEN`（Slack Bot Token）や `ENV_SENTINEL_LOG_LEVEL` を定義しておくと、起動と同時に Slack 通知・センサ読み取り・設定再適用が行われます。`config/app_config.json` を編集して保存すると、通知設定やセンサ読み取り間隔/I2Cアドレスの変更が自動的に反映されます。
 
+### Raspberry Pi 実機での起動とセンサ確認
+実機で BME280 を利用する際は、以下の手順で環境変数とドライバを整備してください。
+
+1. プロジェクトルートへ移動し仮想環境を有効化  
+   ```bash
+   cd /home/pi/work/env-sentinel
+   source .venv/bin/activate
+   export PYTHONPATH=/home/pi/work/env-sentinel/src
+   export $(grep -v '^#' .env | xargs)  # Slack トークンなどを読み込み
+   ```
+2. 依存ライブラリの導入（初回のみ）  
+   ```bash
+   pip install adafruit-circuitpython-bme280 adafruit-blinka
+   ```
+3. I2C を有効化し、`i2cdetect -y 1` で 0x76/0x77 が見えることを確認。  
+4. BME280 ドライバが解決されているかを次のスクリプトで確認。`RaspberryPiBME280Driver` が表示されれば準備完了です。  
+   ```bash
+   python - <<'PY'
+   from env_sentinel.config import AppConfig
+   from env_sentinel.sensors import create_default_sensor_factory
+
+   cfg = AppConfig.defaults()
+   factory = create_default_sensor_factory(prefer_hardware=True)
+   sensor = factory.create(config=cfg.sensor, sensor_id="probe")
+   print("Driver:", sensor._driver.__class__)  # RaspberryPiBME280Driver ならOK
+   PY
+   ```
+5. `python -m env_sentinel.app` を実行すると、MonitoringLoop が自動で実機ドライバを選び、実測値が Slack／SQLite に保存されます。定期レポートの値が固定（24.5℃/48%）の場合は、上記の手順でドライバが読み込まれているかを再確認してください。
+
+これらの手順を踏むことで、シミューレータにフォールバックせず実機の BME280 を利用できます。
+
 ## 技術スタック
 
 | カテゴリ | ライブラリ / ツール | 概要 | バージョン例 |
